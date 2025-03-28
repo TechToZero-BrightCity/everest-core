@@ -305,7 +305,7 @@ void EvseManager::ready() {
             r_hlc[0]->subscribe_current_demand_finished([this] {
                 current_demand_active = false;
                 sae_bidi_active = false;
-                d20_selected_service_parameters.reset();
+                d20_selected_service_parameters.reset(); // TODO(sl): Look for another position
                 if (not r_over_voltage_monitor.empty()) {
                     r_over_voltage_monitor[0]->call_stop();
                 }

@@ -28,7 +28,7 @@ ErrorDatabaseSqlite::ErrorDatabaseSqlite(const fs::path& db_path_, const bool re
         EVLOG_info << "Using database at " << this->db_path;
         try {
             this->check_database();
-        } catch (std::exception& e) {
+        } catch (const std::exception& e) {
             EVLOG_error << "Error checking database: " << e.what();
             EVLOG_info << "Resetting database";
             this->reset_database();
@@ -86,7 +86,7 @@ void ErrorDatabaseSqlite::check_database() {
         if (columns != required_columns) {
             throw Everest::EverestConfigError("Errors table does not contain all required columns");
         }
-    } catch (std::exception& e) {
+    } catch (const std::exception& e) {
         EVLOG_error << "Error checking database: " << e.what();
     }
 }
@@ -123,7 +123,7 @@ void ErrorDatabaseSqlite::reset_database() {
             EVLOG_error << "Error creating database during reset";
             throw everest::db::QueryExecutionException(db.get_error_message());
         }
-    } catch (std::exception& e) {
+    } catch (const std::exception& e) {
         EVLOG_error << "Error resetting the database: " << e.what();
     }
 }
@@ -160,7 +160,7 @@ void ErrorDatabaseSqlite::add_error_without_mutex(Everest::error::ErrorPtr error
         if (stmt->step() != SQLITE_DONE) {
             throw everest::db::QueryExecutionException(db.get_error_message());
         }
-    } catch (std::exception& e) {
+    } catch (const std::exception& e) {
         EVLOG_error << "Error adding error to database: " << e.what();
     }
 }
@@ -273,7 +273,7 @@ std::list<Everest::error::ErrorPtr> ErrorDatabaseSqlite::get_errors(const std::o
         if (status != SQLITE_DONE) {
             throw everest::db::QueryExecutionException(db.get_error_message());
         }
-    } catch (std::exception& e) {
+    } catch (const std::exception& e) {
         EVLOG_error << "Error getting errors from database: " << e.what();
     }
     return result;
@@ -312,7 +312,7 @@ ErrorDatabaseSqlite::remove_errors_without_mutex(const std::list<Everest::error:
             sql += " WHERE " + condition.value();
         }
         db.execute_statement(sql);
-    } catch (std::exception& e) {
+    } catch (const std::exception& e) {
         EVLOG_error << "Error removing errors from database: " << e.what();
     }
     return result;

@@ -2,7 +2,9 @@
 // Copyright Pionix GmbH and Contributors to EVerest
 
 #include "ErrorDatabaseSqlite.hpp"
+#include "everest/database/sqlite/statement.hpp"
 
+#include <everest/database/exceptions.hpp>
 #include <everest/database/sqlite/connection.hpp>
 #include <everest/exceptions.hpp>
 #include <everest/logging.hpp>
@@ -37,53 +39,55 @@ ErrorDatabaseSqlite::ErrorDatabaseSqlite(const fs::path& db_path_, const bool re
 void ErrorDatabaseSqlite::check_database() {
     BOOST_LOG_FUNCTION();
     EVLOG_info << "Checking database";
-    std::shared_ptr<everest::db::sqlite::Connection> db;
     try {
+        std::shared_ptr<everest::db::sqlite::Connection> db;
         db = std::make_shared<everest::db::sqlite::Connection>(this->db_path);
-        db->open_connection();
-    } catch (std::exception& e) {
-        EVLOG_error << "Error opening database: " << e.what();
-        throw;
-    }
-    std::string sql = "SELECT name";
-    sql += " FROM sqlite_schema";
-    sql += " WHERE type = 'table' AND name NOT LIKE 'sqlite_%';";
-    auto stmt = db->new_statement(sql);
-    bool has_errors_table = false;
-    int status;
-    while ((status = stmt->step()) == SQLITE_ROW) {
-        std::string table_name = stmt->column_text(0);
-        if (table_name == "errors") {
-            if (has_errors_table) {
-                throw Everest::EverestConfigError("Database contains multiple errors tables");
-            }
-            has_errors_table = true;
-            EVLOG_debug << "Found errors table";
-        } else {
-            EVLOG_warning << "Found unknown table: " << table_name;
+        if (!db->open_connection()) {
+            EVLOG_error << "Error opening database";
+            throw everest::db::ConnectionException(db->get_error_message());
         }
-    }
-    if (status != SQLITE_DONE) {
-        throw Everest::EverestConfigError("Error reading from database");
-    }
-    if (!has_errors_table) {
-        throw Everest::EverestConfigError("Database does not contain errors table");
-    }
-    sql = "PRAGMA table_info(errors);";
-    auto stmt2 = db->new_statement(sql);
-    std::set<std::string> columns;
-    while ((status = stmt2->step()) == SQLITE_ROW) {
-        auto variant = stmt2->column_variant("name");
-        columns.insert(std::get<std::string>(variant));
-    }
-    std::set<std::string> required_columns = {
-        "uuid",      "type",     "description", "message",  "origin_module", "origin_implementation",
-        "timestamp", "severity", "state",       "sub_type", "vendor_id"};
-    if (status != SQLITE_DONE) {
-        throw Everest::EverestConfigError("Error reading from Errors Table");
-    }
-    if (columns != required_columns) {
-        throw Everest::EverestConfigError("Errors table does not contain all required columns");
+        std::string sql = "SELECT name";
+        sql += " FROM sqlite_schema";
+        sql += " WHERE type = 'table' AND name NOT LIKE 'sqlite_%';";
+        auto stmt = db->new_statement(sql);
+        bool has_errors_table = false;
+        int status;
+        while ((status = stmt->step()) == SQLITE_ROW) {
+            std::string table_name = stmt->column_text(0);
+            if (table_name == "errors") {
+                if (has_errors_table) {
+                    throw Everest::EverestConfigError("Database contains multiple errors tables");
+                }
+                has_errors_table = true;
+                EVLOG_debug << "Found errors table";
+            } else {
+                EVLOG_warning << "Found unknown table: " << table_name;
+            }
+        }
+        if (status != SQLITE_DONE) {
+            throw Everest::EverestConfigError(db->get_error_message());
+        }
+        if (!has_errors_table) {
+            throw Everest::EverestConfigError("Database does not contain errors table");
+        }
+        sql = "PRAGMA table_info(errors);";
+        auto stmt2 = db->new_statement(sql);
+        std::set<std::string> columns;
+        while ((status = stmt2->step()) == SQLITE_ROW) {
+            auto variant = stmt2->column_variant("name");
+            columns.insert(std::get<std::string>(variant));
+        }
+        std::set<std::string> required_columns = {
+            "uuid",      "type",     "description", "message",  "origin_module", "origin_implementation",
+            "timestamp", "severity", "state",       "sub_type", "vendor_id"};
+        if (status != SQLITE_DONE) {
+            throw Everest::EverestConfigError(db->get_error_message());
+        }
+        if (columns != required_columns) {
+            throw Everest::EverestConfigError("Errors table does not contain all required columns");
+        }
+    } catch (std::exception& e) {
+        EVLOG_error << "Error checking database: " << e.what();
     }
 }
 
@@ -98,6 +102,10 @@ void ErrorDatabaseSqlite::reset_database() {
     }
     try {
         everest::db::sqlite::Connection db(this->db_path);
+        if (!db.open_connection()) {
+            EVLOG_error << "Error opening database during reset";
+            throw everest::db::ConnectionException(db.get_error_message());
+        }
         std::string sql = "CREATE TABLE errors("
                           "uuid TEXT PRIMARY      KEY     NOT NULL,"
                           "type                   TEXT    NOT NULL,"
@@ -110,10 +118,13 @@ void ErrorDatabaseSqlite::reset_database() {
                           "state                  TEXT    NOT NULL,"
                           "sub_type               TEXT    NOT NULL,"
                           "vendor_id              TEXT    NOT NULL);";
-        db.execute_statement(sql);
+
+        if (!db.execute_statement(sql)) {
+            EVLOG_error << "Error creating database during reset";
+            throw everest::db::QueryExecutionException(db.get_error_message());
+        }
     } catch (std::exception& e) {
-        EVLOG_error << "Error creating database: " << e.what();
-        throw;
+        EVLOG_error << "Error resetting the database: " << e.what();
     }
 }
 
@@ -126,32 +137,36 @@ void ErrorDatabaseSqlite::add_error_without_mutex(Everest::error::ErrorPtr error
     BOOST_LOG_FUNCTION();
     try {
         everest::db::sqlite::Connection db(this->db_path);
+        if (!db.open_connection()) {
+            EVLOG_error << "Error opening database";
+            throw everest::db::ConnectionException(db.get_error_message());
+        }
         std::string sql = "INSERT INTO errors(uuid, type, description, message, origin_module, origin_implementation, "
                           "timestamp, severity, state, sub_type, vendor_id) VALUES(";
         sql += "?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11);";
         auto stmt = db.new_statement(sql);
-        stmt->bind_text(1, error->uuid.to_string());
+        stmt->bind_text(1, error->uuid.to_string(), everest::db::sqlite::SQLiteString::Transient);
         stmt->bind_text(2, error->type);
         stmt->bind_text(3, error->description);
         stmt->bind_text(4, error->message);
         stmt->bind_text(5, error->origin.module_id);
         stmt->bind_text(6, error->origin.implementation_id);
-        stmt->bind_text(7, Everest::Date::to_rfc3339(error->timestamp));
-        stmt->bind_text(8, Everest::error::severity_to_string(error->severity));
-        stmt->bind_text(9, Everest::error::state_to_string(error->state));
+        stmt->bind_text(7, Everest::Date::to_rfc3339(error->timestamp), everest::db::sqlite::SQLiteString::Transient);
+        stmt->bind_text(8, Everest::error::severity_to_string(error->severity),
+                        everest::db::sqlite::SQLiteString::Transient);
+        stmt->bind_text(9, Everest::error::state_to_string(error->state), everest::db::sqlite::SQLiteString::Transient);
         stmt->bind_text(10, error->sub_type);
         stmt->bind_text(11, error->vendor_id);
         if (stmt->step() != SQLITE_DONE) {
-            throw;
+            throw everest::db::QueryExecutionException(db.get_error_message());
         }
     } catch (std::exception& e) {
         EVLOG_error << "Error adding error to database: " << e.what();
-        throw;
     }
 }
 
 std::string ErrorDatabaseSqlite::filter_to_sql_condition(const Everest::error::ErrorFilter& filter) {
-    std::string condition = "";
+    std::string condition{};
     switch (filter.get_filter_type()) {
     case Everest::error::FilterType::State: {
         condition = "(state = '" + Everest::error::state_to_string(filter.get_state_filter()) + "')";
@@ -222,6 +237,10 @@ std::list<Everest::error::ErrorPtr> ErrorDatabaseSqlite::get_errors(const std::o
     std::list<Everest::error::ErrorPtr> result;
     try {
         everest::db::sqlite::Connection db(this->db_path);
+        if (!db.open_connection()) {
+            EVLOG_error << "Error opening database";
+            throw everest::db::ConnectionException(db.get_error_message());
+        }
         std::string sql = "SELECT * FROM errors";
         if (condition.has_value()) {
             sql += " WHERE " + condition.value();
@@ -252,11 +271,10 @@ std::list<Everest::error::ErrorPtr> ErrorDatabaseSqlite::get_errors(const std::o
             result.push_back(error);
         }
         if (status != SQLITE_DONE) {
-            throw;
+            throw everest::db::QueryExecutionException(db.get_error_message());
         }
     } catch (std::exception& e) {
         EVLOG_error << "Error getting errors from database: " << e.what();
-        throw;
     }
     return result;
 }
@@ -285,6 +303,10 @@ ErrorDatabaseSqlite::remove_errors_without_mutex(const std::list<Everest::error:
     std::list<Everest::error::ErrorPtr> result = this->get_errors(condition);
     try {
         everest::db::sqlite::Connection db(this->db_path);
+        if (!db.open_connection()) {
+            EVLOG_error << "Error opening database";
+            throw everest::db::ConnectionException(db.get_error_message());
+        }
         std::string sql = "DELETE FROM errors";
         if (condition.has_value()) {
             sql += " WHERE " + condition.value();
@@ -292,7 +314,6 @@ ErrorDatabaseSqlite::remove_errors_without_mutex(const std::list<Everest::error:
         db.execute_statement(sql);
     } catch (std::exception& e) {
         EVLOG_error << "Error removing errors from database: " << e.what();
-        throw;
     }
     return result;
 }

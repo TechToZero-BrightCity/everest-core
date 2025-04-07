@@ -2,10 +2,10 @@
 // Copyright Pionix GmbH and Contributors to EVerest
 
 #include "ErrorDatabaseSqlite.hpp"
-#include "everest/database/sqlite/statement.hpp"
 
 #include <everest/database/exceptions.hpp>
 #include <everest/database/sqlite/connection.hpp>
+#include <everest/database/sqlite/statement.hpp>
 #include <everest/exceptions.hpp>
 #include <everest/logging.hpp>
 

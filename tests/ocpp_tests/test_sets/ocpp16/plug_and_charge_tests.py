@@ -567,6 +567,25 @@ class TestPlugAndCharge:
         assert data_transfer_response.status == "Rejected"
 
     @pytest.mark.asyncio
+    @pytest.mark.source_certs_dir(Path(__file__).parent.parent / "everest-aux")
+    async def test_pnc_get_installed_certificate_ids_empty_not_found(
+        self, charge_point_v16: ChargePoint16
+    ):
+        """
+        Test get installed certificate ids when no certificates are installed.
+        """
+        get_installed_certificate_ids_req = {"certificateType": []}
+        data_transfer_response = await charge_point_v16.data_transfer_req(
+            vendor_id="org.openchargealliance.iso15118pnc",
+            message_id="GetInstalledCertificateIds",
+            data=json.dumps(get_installed_certificate_ids_req),
+        )
+
+        assert data_transfer_response.status == "Accepted"
+        assert json.loads(data_transfer_response.data) == {"status": "NotFound"}
+        
+
+    @pytest.mark.asyncio
     async def test_pnc_install_certificate(
         self, request, charge_point_v16: ChargePoint16
     ):

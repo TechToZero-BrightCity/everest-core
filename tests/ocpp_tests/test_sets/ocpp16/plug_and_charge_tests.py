@@ -687,7 +687,10 @@ class TestPlugAndCharge:
 @pytest.mark.asyncio
 @pytest.mark.ocpp_config_adaptions(
         GenericOCPP16ConfigAdjustment(
-            [("Internal", "ConnectorEvseIds", "test_value")]
+            [("Internal", "ConnectorEvseIds", "test_value"),
+             ("Internal", "SeccLeafSubjectCommonName", "DEPNX100001"),
+             ("Internal", "SeccLeafSubjectOrganization", "test_value"),
+             ("Internal", "SeccLeafSubjectCountry", "DE")]
         )
     )
 async def test_set_connector_evse_ids(
@@ -737,4 +740,128 @@ async def test_set_connector_evse_ids(
             [{"key": "ConnectorEvseIds", "readonly": False, "value": new_valid_value}]
         ),
     )
+
+    test_utility.messages.clear()
+
+    long_value = "waaaaaaaaaaaaaaaaaaaaaaaaaaaaaay_too_looooooooooooooooooooooooooooooooooong"
+    short_value = "short"
+
+
+    await charge_point_v16.change_configuration_req(
+        key="SeccLeafSubjectCommonName", value=short_value
+    )
+
+    assert await wait_for_and_validate(
+        test_utility,
+        charge_point_v16,
+        "ChangeConfiguration",
+        call_result.ChangeConfigurationPayload(ConfigurationStatus.rejected),
+    )
+    test_utility.messages.clear()
+
+    await charge_point_v16.change_configuration_req(
+        key="SeccLeafSubjectCommonName", value=long_value
+    )
+
+    assert await wait_for_and_validate(
+        test_utility,
+        charge_point_v16,
+        "ChangeConfiguration",
+        call_result.ChangeConfigurationPayload(ConfigurationStatus.rejected),
+    )
+    test_utility.messages.clear()
+
+    await charge_point_v16.change_configuration_req(
+        key="SeccLeafSubjectOrganization", value=long_value
+    )
+
+    assert await wait_for_and_validate(
+        test_utility,
+        charge_point_v16,
+        "ChangeConfiguration",
+        call_result.ChangeConfigurationPayload(ConfigurationStatus.rejected),
+    )
+    test_utility.messages.clear()
+
+    await charge_point_v16.change_configuration_req(
+        key="SeccLeafSubjectCountry", value="GER"
+    )
+
+    assert await wait_for_and_validate(
+        test_utility,
+        charge_point_v16,
+        "ChangeConfiguration",
+        call_result.ChangeConfigurationPayload(ConfigurationStatus.rejected),
+    )
+    test_utility.messages.clear()
+
+    await charge_point_v16.change_configuration_req(
+        key="SeccLeafSubjectCommonName", value=short_value
+    )
+
+    assert await wait_for_and_validate(
+        test_utility,
+        charge_point_v16,
+        "ChangeConfiguration",
+        call_result.ChangeConfigurationPayload(ConfigurationStatus.rejected),
+    )
+
+    # valid values
+    valid_common_name = "valid_common_name"
+    valid_organization = "valid_organization"
+    valid_country = "GB"
+
+    test_utility.messages.clear()
+
+    await charge_point_v16.change_configuration_req(
+        key="SeccLeafSubjectCommonName", value=valid_common_name
+    )
+
+    assert await wait_for_and_validate(
+        test_utility,
+        charge_point_v16,
+        "ChangeConfiguration",
+        call_result.ChangeConfigurationPayload(ConfigurationStatus.accepted),
+    )
+    test_utility.messages.clear()
+
+    await charge_point_v16.change_configuration_req(
+        key="SeccLeafSubjectOrganization", value=valid_organization
+    )
+
+    assert await wait_for_and_validate(
+        test_utility,
+        charge_point_v16,
+        "ChangeConfiguration",
+        call_result.ChangeConfigurationPayload(ConfigurationStatus.accepted),
+    )
+    test_utility.messages.clear()
+
+    await charge_point_v16.change_configuration_req(
+        key="SeccLeafSubjectCountry", value=valid_country
+    )
+
+    assert await wait_for_and_validate(
+        test_utility,
+        charge_point_v16,
+        "ChangeConfiguration",
+        call_result.ChangeConfigurationPayload(ConfigurationStatus.accepted),
+    )
+    test_utility.messages.clear()
+
+    await charge_point_v16.get_configuration_req(key=["ConnectorEvseIds", "SeccLeafSubjectCommonName",
+                                                      "SeccLeafSubjectOrganization", "SeccLeafSubjectCountry"])
+    assert await wait_for_and_validate(
+        test_utility,
+        charge_point_v16,
+        "GetConfiguration",
+        call_result.GetConfigurationPayload(
+            [{"key": "ConnectorEvseIds", "readonly": False, "value": new_valid_value},
+             {"key": "SeccLeafSubjectCommonName", "readonly": False, "value": valid_common_name},
+             {"key": "SeccLeafSubjectOrganization", "readonly": False, "value": valid_organization},
+             {"key": "SeccLeafSubjectCountry", "readonly": False, "value": valid_country}]
+        ),
+    )
+
+    
 

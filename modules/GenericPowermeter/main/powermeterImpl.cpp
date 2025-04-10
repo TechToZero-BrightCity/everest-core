@@ -65,7 +65,7 @@ void powermeterImpl::init_default_values() {
     this->pm_last_values.timestamp = Everest::Date::to_rfc3339(date::utc_clock::now());
     this->pm_last_values.meter_id = std::string(this->mod->info.id);
 
-    for (auto& register_data : this->pm_configuration) {
+    for (const auto& register_data : this->pm_configuration) {
         if (register_data.type == ENERGY_WH_IMPORT_TOTAL) {
             this->pm_last_values.energy_Wh_import.total = 0.0f;
         } else if (register_data.type == ENERGY_WH_IMPORT_L1) {

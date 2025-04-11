@@ -121,6 +121,8 @@ active_modules:
           implementation_id: ev
   ocpp:
     module: OCPP201
+    # config_module:
+    #   DeviceModelConfigPath: /workspace/everest-core/config/ocpp201
     connections:
       evse_manager:
         - module_id: evse_manager_1

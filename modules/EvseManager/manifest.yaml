@@ -302,8 +302,6 @@ config:
       timeout occurs. It is recommended to disable it if OCPP1.6 is used.
     type: boolean
     default: false
-<<<<<<< Updated upstream
-=======
   sleep_before_enabling_pwm_hlc_mode_ms:
     description: >- 
       Sleep before the PWM signal is updated in HLC mode. Teslas are really fast with sending the first slac packet after
@@ -321,7 +319,6 @@ config:
       Used for ISO15118 plug and charge: Indicates if the charger support contract CertificateInstall and CertificateUpdate
     type: boolean
     default: true
->>>>>>> Stashed changes
 provides:
   evse:
     interface: evse_manager
